@@ -1,36 +1,45 @@
 local execute_comment = {}
 
 local function trim_pre_space(line)
-    return (line:gsub("^%s*(.-)%s*$", "%1"))
+    --[[
+    string.find(), 默认使用 lua 的正则匹配
+    返回第一个匹配到的子串的下标
+    parameters:
+        str 进行搜索的字符串
+        substr 要搜索的子串，可为 lua 中的正则表达式
+        init 搜索起始位置，默认为 1
+        plain 是否使用正则匹配，默认为 false
+    lua 中的正则表达式是 lua 自己定义的，与通常所说的正则表达式有不少区别
+    具体可查阅 lua 官方文档 Patterns 与 Pattern-Matching Functions 相关小节
+    lua 中使用 %s 表示任意空白字符 大写就是取反 %S 表示任意非空白字符
+    --]]
+    local line_blank_len = line:find("%S") or 1
+    --[[
+    string.sub()
+    parameters:
+        s 进行操作的字符串
+        i 提前子串的起始位置，闭区间
+        j 提前子串的结束位置，闭区间，可为负数，-1 表示最后一个字符位置，-2 表示倒数第二个字符位置，以此类推
+    --]]
+    return line:sub(line_blank_len)
 end
 
---  根据当前行去除前导空格后，最前面的字串是否与单行注释相同来判断
+--  根据当前行去除前导空格后，最前面的字串是否与单行注释样式相同来判断
 local function is_commented_single(filetype_format)
     --[[
     vim.api.nvim_get_current_line()
-    以字符串返回得到当前行的内容
+    以字符串返回当前行的内容
     --]]
     local line = trim_pre_space(vim.api.nvim_get_current_line())
     return line:sub(1, #filetype_format['single']) == filetype_format['single']
 end
 
---  根据当前行去除前导空格后，最前面的字串是否与注释样式相同来判断
-local function is_commented_block(filetype_format)
-    --[[
-    vim.api.nvim_buf_get_lines({buffer}, {start}, {end}, {strict_indexing})
-    以数组返回缓冲区 buffer 中 (start, end] 左开右闭行号范围内的行内容
-    Parameters
-        {buffer} Buffer handle, or 0 for current buffer
-        {start} First line index
-        {end} Last line index, exclusive
-        {strict_indexing} Whether out-of-bounds should be an error.
-    --]]
-    local start_line = vim.api.nvim_buf_get_lines(0, vim.fn.line("'<")-1, vim.fn.line("'<"), true)[1]
-    local end_line = vim.api.nvim_buf_get_lines(0, vim.fn.line("'>")-1, vim.fn.line("'>"), true)[1]
-    local line_1 = trim_pre_space(start_line)
-    local line_2 = trim_pre_space(end_line)
-    return line_1:sub(1, #filetype_format.block['head']) == filetype_format.block['head'] and
-           line_2:sub(1, #filetype_format.block['tail']) == filetype_format.block['tail']
+--  根据当前行去除前导空格后，最前面的字串是否与多行注释样式相同来判断
+local function is_commented_block(filetype_format, selected_lines)
+    local start_line = trim_pre_space(selected_lines[1])
+    local end_line = trim_pre_space(selected_lines[#selected_lines])
+    return start_line:sub(1, #filetype_format.block['head']) == filetype_format.block['head'] and
+           end_line:sub(1, #filetype_format.block['tail']) == filetype_format.block['tail']
 end
 
 function execute_comment.toggle_single(filetype_format)
@@ -45,19 +54,57 @@ function execute_comment.toggle_single(filetype_format)
     end
 end
 
-function execute_comment.toggle_block(filetype_format)
+function execute_comment.toggle_block(filetype_format, selected_range)
     if filetype_format['block'] == nil or
        filetype_format.block['head'] == nil or
        filetype_format.block['tail'] == nil then
         return nil
     end
 
-    if is_commented_block(filetype_format) then
-        vim.cmd('\'<normal dd')
-        vim.cmd('\'>normal dd')
+    local start_line_number = selected_range[1]
+    local end_line_number = selected_range[2]
+    --[[
+    vim.api.nvim_buf_get_lines({buffer}, {start}, {end}, {strict_indexing})
+    以数组返回缓冲区 buffer 中 (start, end] 左开右闭行号范围内的行内容
+    Parameters
+        {buffer} Buffer handle, or 0 for current buffer
+        {start} First line index
+        {end} Last line index, exclusive
+        {strict_indexing} Whether out-of-bounds should be an error.
+    --]]
+    local selected_lines = vim.api.nvim_buf_get_lines(0, start_line_number-1, end_line_number, true)
+    if is_commented_block(filetype_format, selected_lines) then
+        vim.api.nvim_buf_set_lines(0, end_line_number-1, end_line_number, true, {})
+        vim.api.nvim_buf_set_lines(0, start_line_number-1, start_line_number, true, {})
     else
-        vim.cmd('\'<normal O'..filetype_format.block['head'])
-        vim.cmd('\'>normal o'..filetype_format.block['tail'])
+        local min_blank = 999
+        for _,line in pairs(selected_lines) do
+            local line_blank_len =  line:find("%S") or 0
+            min_blank = math.min(min_blank, line_blank_len)
+            if min_blank == 0 then
+                break;
+            end
+        end
+        local prefix = ""
+        if min_blank ~= 0 then
+            prefix = string.format("%" .. min_blank-1 .. "s", "")
+        end
+        local insert_start_line = prefix..filetype_format.block['head']
+        local insert_end_line = prefix..filetype_format.block['tail']
+        --[[
+        nvim_buf_set_lines()
+        Parameters:
+            {buffer} 0 表示当前 buffer
+            {start} 进行操作的起始行行号， 闭区间
+            {end} 进行操作的结束行行号，开区间
+            {strict_indexing} 超出范围是否报错
+            {replacement} 用于替换的行内容
+        Note:
+            [start,end) 左闭右开
+            如果 start == end 则在该行之后插入 replacement 内容
+        --]]
+        vim.api.nvim_buf_set_lines(0, end_line_number, end_line_number, true, {insert_end_line})
+        vim.api.nvim_buf_set_lines(0, start_line_number-1, start_line_number-1, true, {insert_start_line})
     end
 end
 

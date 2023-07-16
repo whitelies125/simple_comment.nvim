@@ -11,6 +11,8 @@ function M.comment(mode)
     end
 
     local is_single = false
+    local start_line_number = 0
+    local end_line_number = 0
     if mode == "n" then
         is_single = true
     elseif mode == "v" then
@@ -19,9 +21,9 @@ function M.comment(mode)
         vim.fn.line("'<") : 得到最近一次 visual mode 下选择区域的首行行号，若该标记不存在则返回 0
         vim.fn.line("'>") : 得到最近一次 visual mode 下选择区域的尾行行号，若该标记不存在则返回 0
         --]]
-        local start_line = vim.fn.line("'<")
-        local end_line = vim.fn.line("'>")
-        is_single = start_line == end_line
+        start_line_number = vim.fn.line("'<")
+        end_line_number = vim.fn.line("'>")
+        is_single = start_line_number == end_line_number
     else
         return nil
     end
@@ -30,7 +32,7 @@ function M.comment(mode)
     if is_single then
         execute_comment.toggle_single(filetype_format)
     else
-        execute_comment.toggle_block(filetype_format)
+        execute_comment.toggle_block(filetype_format, {start_line_number, end_line_number})
     end
 end
 
