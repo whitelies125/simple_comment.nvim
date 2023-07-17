@@ -32,7 +32,7 @@ function M.comment(mode)
     if is_single then
         execute_comment.toggle_single(filetype_format)
     else
-        execute_comment.toggle_block(filetype_format, {start_line_number, end_line_number})
+        execute_comment.toggle_block(filetype_format, start_line_number, end_line_number)
     end
 end
 
