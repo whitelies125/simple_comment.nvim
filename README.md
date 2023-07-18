@@ -63,7 +63,7 @@
 4   --]]
 ```
 
-取消一对块注释行时，选中一对块注释行，或选中块首注释行其后首行及块尾注释行其前首行，皆可：
+取消一对块注释行时，选中块首注释行或其后一行，及块尾注释行或其前一行，皆可：
 
 ```lua
     --before
@@ -74,19 +74,13 @@
 
     -- case 1: select line 1,2,3,4
     -- case 2: select line 2,3
+    -- case 3: select line 1,2,3
+    -- case 4: select line 2,3,4
     -- press <CTRL-/>, uncomment this block
 1   print("hello world")
 2   print("byebye world")
 
     -- other case: execute comment
-    -- case 3: select line 1,2
-    -- press <CTRL-/>, comment line 1,2
-1   --[[
-2   --[[
-3   print("hello world")
-4   --]]
-5   print("byebye world")
-6   --]]
 ```
 
 # install

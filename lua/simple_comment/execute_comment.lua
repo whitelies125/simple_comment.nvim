@@ -44,35 +44,44 @@ local function is_commented_single(filetype_format)
     return line:sub(1, #filetype_format['single']) == filetype_format['single']
 end
 
---  满足以下条件之一，则当前 visual 模式下选中行是已注释状态：
---  1. 选中行的首行、尾行为一对块注释行
---  2. 选中行的首行的前一行、尾行的后一行为一对块注释行
+--  同时满足下列所有条件，则当前 visual 模式下选中行是已注释状态：
+--  1. 选中行的首行为块首注释行，或块首注释行的后一行
+--  2. 选中行的尾行为块尾注释行，或块尾注释行的前一行
 local function is_commented_block(filetype_format, start_line_number, end_line_number)
     local start_line = trim_pre_space(vim.api.nvim_buf_get_lines(0, start_line_number-1, start_line_number, true)[1])
     local end_line = trim_pre_space(vim.api.nvim_buf_get_lines(0, end_line_number-1, end_line_number, true)[1])
-    local condition_1 = start_line:sub(1, #filetype_format.block['head']) == filetype_format.block['head'] and
-                        end_line:sub(1, #filetype_format.block['tail']) == filetype_format.block['tail']
-    -- vim 中 buffer 首行行号为 1
-    if start_line_number == 1 or end_line_number == vim.fn.line("$") then
-        -- only judge condition 1
-        if condition_1 then
-            return 1
-        end
-    else
-        -- judge condition 1
-        if condition_1 then
-            return 1
-        end
-
-        -- judge condition 2
-        local before_start_line = trim_pre_space(vim.api.nvim_buf_get_lines(0, start_line_number-2, start_line_number-1, true)[1])
-        local after_end_line = trim_pre_space(vim.api.nvim_buf_get_lines(0, end_line_number, end_line_number+1, true)[1])
-        if before_start_line:sub(1, #filetype_format.block['head']) == filetype_format.block['head'] and
-            after_end_line:sub(1, #filetype_format.block['tail']) == filetype_format.block['tail'] then
-            return 2
-        end
-        return 0
+    local condition_1 = start_line:sub(1, #filetype_format.block['head']) == filetype_format.block['head']
+    local condition_2 = end_line:sub(1, #filetype_format.block['tail']) == filetype_format.block['tail']
+    if condition_1 and condition_2 then
+        -- 选中行首行为快首注释行，尾行为块尾注释行
+        return {start_line_number, end_line_number}
     end
+    if condition_1 and end_line_number ~= vim.fn.line("$") then
+        -- vim.fn.line("$") 返回当前缓冲区尾行行号
+        local after_end_line = trim_pre_space(vim.api.nvim_buf_get_lines(0, end_line_number, end_line_number+1, true)[1])
+        if after_end_line:sub(1, #filetype_format.block['tail']) == filetype_format.block['tail'] then
+            return {start_line_number, end_line_number+1}
+        end
+        return nil
+    end
+    if condition_2 and start_line_number ~= 1 then
+        -- vim 中 buffer 首行行号为 1
+        local before_start_line = trim_pre_space(vim.api.nvim_buf_get_lines(0, start_line_number-2, start_line_number-1, true)[1])
+        if before_start_line:sub(1, #filetype_format.block['head']) == filetype_format.block['head'] then
+            return {start_line_number-1, end_line_number}
+        end
+        return nil
+    end
+    if start_line_number == 1 or end_line_number == vim.fn.line("$") then
+        return nil
+    end
+    local before_start_line = trim_pre_space(vim.api.nvim_buf_get_lines(0, start_line_number-2, start_line_number-1, true)[1])
+    local after_end_line = trim_pre_space(vim.api.nvim_buf_get_lines(0, end_line_number, end_line_number+1, true)[1])
+    if before_start_line:sub(1, #filetype_format.block['head']) == filetype_format.block['head'] and
+       after_end_line:sub(1, #filetype_format.block['tail']) == filetype_format.block['tail'] then
+        return {start_line_number-1, end_line_number+1}
+    end
+    return nil
 end
 
 function execute_comment.toggle_single(filetype_format)
@@ -103,12 +112,10 @@ function execute_comment.toggle_block(filetype_format, start_line_number, end_li
         {strict_indexing} Whether out-of-bounds should be an error.
     --]]
     local ret = is_commented_block(filetype_format, start_line_number, end_line_number)
-    if ret == 1 then
-        vim.api.nvim_buf_set_lines(0, end_line_number-1, end_line_number, true, {})
-        vim.api.nvim_buf_set_lines(0, start_line_number-1, start_line_number, true, {})
-    elseif ret == 2 then
-        vim.api.nvim_buf_set_lines(0, end_line_number, end_line_number+1, true, {})
-        vim.api.nvim_buf_set_lines(0, start_line_number-2, start_line_number-1, true, {})
+    if ret ~= nil then
+        -- 因为先删除块首注释行会导致块尾注释行行号 - 1，所以应先删除块尾注释行，再删除块首注释行
+        vim.api.nvim_buf_set_lines(0, ret[2]-1, ret[2], true, {})
+        vim.api.nvim_buf_set_lines(0, ret[1]-1, ret[1], true, {})
     else
         local selected_lines = vim.api.nvim_buf_get_lines(0, start_line_number-1, end_line_number, true)
         local min_blank = 999
