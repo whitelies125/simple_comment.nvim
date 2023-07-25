@@ -32,26 +32,18 @@
 
 ### visual mode
 
-当在 visual 模式时，若只选中单行，则与 normal 模式下相同：
-
-~~~lua
-    -- before
-1   print("hello world")
-2   print("byebye world")
-
-    -- only select line 1, press <CTRL-/>, comment line 1, same to normal mode
-1   -- print("hello world")
-2   print("byebye world")
-
-    -- only select line 1, press <CTRL-/> again, uncomment line 1, same to normal mode
-1   print("hello world")
-2   print("byebye world")
-~~~
-
-若选中多行，则会将所选范围行的前、后插入一对块注释行：
+当在 visual 模式时，会将所选范围行的前、后插入一对块注释行：
 
 
 ```lua
+    -- before
+1   print("hello world")
+
+    -- select line 1, press <CTRL-/>, comment this block
+1   --[[
+2   print("hello world")
+3   --]]
+
     -- before
 1   print("hello world")
 2   print("byebye world")
