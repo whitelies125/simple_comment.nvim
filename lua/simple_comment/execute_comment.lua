@@ -84,6 +84,22 @@ local function is_commented_block(filetype_format, start_line_number, end_line_n
     return nil
 end
 
+--  同时满足下列所有条件，则当前 visual 模式下选中行是已注释状态：
+--  1. 非空行都处于单行注释状态
+--  注意辨析，除空白字符外仅有单行注释字符的行，并不是空行
+local function is_commented_multiple_single(filetype_format, start_line_number, end_line_number)
+    local lines = vim.api.nvim_buf_get_lines(0, start_line_number-1, end_line_number, true)
+    for _,line in pairs(lines) do
+        if line:find("%S") ~= nil then
+            local line = trim_pre_space(line)
+            if line:sub(1, #filetype_format['single']) ~= filetype_format["single"] then
+                return false
+            end
+        end
+    end
+    return true
+end
+
 function execute_comment.toggle_single(filetype_format)
     if filetype_format['single'] == nil then
         return nil
@@ -100,7 +116,38 @@ function execute_comment.toggle_block(filetype_format, start_line_number, end_li
     if filetype_format['block'] == nil or
        filetype_format.block['head'] == nil or
        filetype_format.block['tail'] == nil then
-        return nil
+        -- 对无多行注释的语言如 python，采用每行使用单行注释
+        local is_commented = is_commented_multiple_single(filetype_format, start_line_number, end_line_number)
+        local lines = vim.api.nvim_buf_get_lines(0, start_line_number-1, end_line_number, true)
+        if is_commented then
+            for count,line in ipairs(lines) do
+                local line_blank_len =  line:find("%S")
+                if line_blank_len ~= nil then
+                    line = line:sub(1,line_blank_len-1) .. line:sub(line_blank_len+2)
+                    vim.api.nvim_buf_set_lines(0, start_line_number+count-2, start_line_number+count-1, true, {line})
+                end
+            end
+        else
+            local min_blank = 999
+            for _,line in pairs(lines) do
+                local line_blank_len =  line:find("%S") or 0
+                min_blank = math.min(min_blank, line_blank_len)
+                if min_blank == 0 then break end
+            end
+
+            for count,line in ipairs(lines) do
+                if line:find("%S") ~= nil then
+                    -- 只对非空行添加注释
+                    if min_blank == 0 then
+                        line = filetype_format["single"] .. " " .. line
+                    else
+                        line = line:sub(1,min_blank-1) .. filetype_format['single'] .. " " .. line:sub(min_blank)
+                    end
+                    vim.api.nvim_buf_set_lines(0, start_line_number+count-2, start_line_number+count-1, true, {line})
+                end
+            end
+        end
+        return
     end
     --[[
     vim.api.nvim_buf_get_lines({buffer}, {start}, {end}, {strict_indexing})
