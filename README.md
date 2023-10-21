@@ -4,15 +4,6 @@
 
 # usage
 
-定义：
-
-- 前导空白字符：行首个非空白字符前的所有空白字符
-- 单行注释行：除去前导空白字符，行首内容与该文件类型的 single 注释样式相同的行
-- 多行注释行：连续多行出现的单行注释行
-- 块首注释行：除去前导空白字符，行首内容与该文件类型 'head' 注释样式相同，且与块尾注释行成对出现注释掉一块文本的行
-- 块尾注释行：除去前导空白字符，行首内容与该文件类型 'tail' 注释样式相同，且与块首注释行成对出现注释掉一块文本的行
-- 一对块注释行：一对成对出现注释掉一块文本的的块首注释行和快尾注释行
-
 ## example
 
 ### normal mode
@@ -32,7 +23,7 @@
 
 ### visual mode
 
-当在 visual 模式时，会将所选范围行的前、后插入一对块注释行：
+当在 visual 模式时，会将所选范围行的前、后插入一对注释：
 
 
 ```lua
@@ -55,7 +46,7 @@
 4   --]]
 ```
 
-取消一对块注释行时，选中块首注释行或其后一行，及块尾注释行或其前一行，皆可：
+取消多行注释时，选中首注释行或其后一行，及尾注释行或其前一行，皆可：
 
 ```lua
     --before
@@ -71,8 +62,32 @@
     -- press <CTRL-/>, uncomment this block
 1   print("hello world")
 2   print("byebye world")
-
     -- other case: execute comment
+```
+
+对于仅配置了 single 注释样式的文件类型（如 python）：
+
+1. 采用对每行使用单行注释的方式，达到多行注释的效果
+
+2. 取消注释，不再具有上述 "选中首注释行或其后一行，及尾注释行或其前一行" 的功能，仅对选中行有效
+
+
+```python
+    --before
+1   print("hello world")
+2        a = 1
+3   print("byebye world")
+
+    -- press <CTRL-/>, comment this block
+1   # print("hello world")
+2   #     a = 1
+3   # print("byebye world")
+
+    -- only case 1: select line 1,2,3
+    -- press <CTRL-/> again, uncomment this block
+1   print("hello world")
+2       a = 1
+3   print("byebye world")
 ```
 
 # install
@@ -82,13 +97,21 @@
 ```lua
 {
     "whitelies125/simple_comment.nvim",
-    config = true,
-    -- or
-    --[[
+    opts = {
+            filetype_format_config = {
+                c   = {single = "//", block = {head = "/*", tail = "*/"}},
+                cpp = {single = "//", block = {head = "/*", tail = "*/"}},
+                lua = {single = "--", block = {head = "--[[", tail = "--]]"}},
+                python = {single = "#"},
+            }
+    },
     config = function(_, opts)
-        require("simple_comment").setup()
+        local sc = require("simple_comment")
+        sc.setup(opts)
+        --  由于一些原因，在 vim/neovim 中是使用的 <C-_> 表示 CTRL-/，而非 <C-/>
+        vim.keymap.set({"n"}, "<C-_>", ":lua require(\"simple_comment\").comment(\"n\")<CR>", {noremap = true, silent = true})
+        vim.keymap.set({"v"}, "<C-_>", ":lua require(\"simple_comment\").comment(\"v\")<CR>", {noremap = true, silent = true})
     end,
-    --]]
 }
 ```
 
