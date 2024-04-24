@@ -3,7 +3,7 @@ local M = {}
 -- 注意 M 的函数不能为 local，需要是全局
 function M.comment(mode)
     -- vim.bo.filetype 当前 buffer 的文件类型
-    local filetype_format = filetype_format_config[vim.bo.filetype]
+    local filetype_format = Filetype_format_config[vim.bo.filetype]
     if filetype_format == nil then
         print('filetype_format not defined')
         return
@@ -26,7 +26,7 @@ end
 
 function M.setup(opts)
     local default_filetype_format_config = require("simple_comment.filetype_format_config")
-    filetype_format_config = opts.filetype_format_config or default_filetype_format_config
+    Filetype_format_config = opts.filetype_format_config or default_filetype_format_config
     --  由于一些原因，在 vim/neovim 中是使用的 <C-_> 表示 CTRL-/，而不是 <C-/>
 
     --  另 1，虽然不知道为什么，但是使用 :lua require(\"simple_comment\").comment()<CR>
